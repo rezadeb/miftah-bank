@@ -1,0 +1,10 @@
+# build output
+backend/target/
+frontend/node_modules/
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store

@@ -1,0 +1,59 @@
+server:
+  port: ${SERVER_PORT:8081}
+  shutdown: graceful
+
+spring:
+  application:
+    name: miftah-bank-backend
+
+  # Redis: dipakai HANYA untuk validasi login (user credentials)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+      connect-timeout: 2s
+
+  # PostgreSQL: dipakai untuk saldo + riwayat transaksi
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:miftahbank}?connectTimeout=3&socketTimeout=10&loginTimeout=3
+    username: ${POSTGRES_USER:miftah}
+    password: ${POSTGRES_PASSWORD:miftah123}
+    hikari:
+      pool-name: miftah-bank-pool
+      maximum-pool-size: 5
+      minimum-idle: 0
+      connection-timeout: 2000
+      # -1 = aplikasi tetap start walaupun Postgres belum/tidak ada (error ditangani saat request)
+      initialization-fail-timeout: -1
+
+  sql:
+    init:
+      mode: never
+
+# Pengaturan aplikasi (DEMO ONLY - bukan untuk production)
+bank:
+  token-secret: ${BANK_TOKEN_SECRET:miftah-bank-demo-secret-ganti-kalau-perlu-min-32-karakter}
+  token-ttl-minutes: ${BANK_TOKEN_TTL_MINUTES:60}
+  seed-interval-ms: ${BANK_SEED_INTERVAL_MS:30000}
+  seed-users:
+    - username: demo
+      password: demo123
+      full-name: Demo User
+      account-no: "1000000001"
+      initial-balance: 1000000
+    - username: miftah
+      password: miftah123
+      full-name: Miftah Maulana
+      account-no: "1000000002"
+      initial-balance: 5000000
+    - username: alice
+      password: alice123
+      full-name: Alice Wonderland
+      account-no: "1000000003"
+      initial-balance: 2500000
+
+logging:
+  level:
+    root: INFO
+    id.miftah.bank: INFO
