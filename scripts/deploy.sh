@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Deploy / update aplikasi ke cluster (namespace miftah-bank).
-# Pastikan image sudah ada di node K3s (lihat scripts/build-images.sh --import-k3s).
+# Deploy (or update) the app in namespace "miftah-bank".
+# The images must already exist on the K3s node (see scripts/build-images.sh --import-k3s).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,7 +8,7 @@ NS=miftah-bank
 
 kubectl apply -k "$ROOT/k8s"
 
-echo ">>> Menunggu semua deployment siap..."
+echo ">>> Waiting for all deployments to be ready..."
 for d in redis postgres backend frontend load-balancer; do
   kubectl -n "$NS" rollout status "deployment/$d" --timeout=300s
 done
@@ -16,4 +16,4 @@ done
 echo
 kubectl -n "$NS" get pods,svc,ingress
 echo
-echo "Buka aplikasi: http://<IP-node-K3s>/   (login: demo / demo123)"
+echo "Open the app: http://<K3s-node-IP>/   (login: demo / demo123)"

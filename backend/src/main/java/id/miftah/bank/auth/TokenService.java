@@ -17,11 +17,12 @@ import id.miftah.bank.common.ApiException;
 import id.miftah.bank.config.BankProperties;
 
 /**
- * Token login sederhana (HMAC-SHA256, stateless): base64url("username|expiryEpochSec") + "." + base64url(signature).
+ * Simple login token, signed with HMAC-SHA256 and stateless:
+ * base64url("username|expiryEpochSeconds") + "." + base64url(signature).
  *
- * Sengaja stateless supaya Redis hanya dipakai saat LOGIN. Jadi kalau pod Redis mati,
- * user yang sudah login masih bisa cek saldo / transfer (failure domain terpisah per komponen).
- * DEMO ONLY - bukan JWT/standar production.
+ * Why stateless: Redis is only used at LOGIN time. If the Redis pod dies, users who are already
+ * logged in can still check balance and transfer. Each dependency fails on its own.
+ * DEMO ONLY. This is not a standard JWT.
  */
 @Service
 public class TokenService {
@@ -39,6 +40,7 @@ public class TokenService {
         this(props.tokenSecret(), props.tokenTtlMinutes(), Clock.systemUTC());
     }
 
+    // Used by tests, so the clock can be controlled.
     TokenService(String secret, int ttlMinutes, Clock clock) {
         this.secret = secret.getBytes(StandardCharsets.UTF_8);
         this.ttlSeconds = ttlMinutes * 60L;
@@ -46,47 +48,49 @@ public class TokenService {
     }
 
     public String issue(String username) {
-        long exp = clock.instant().getEpochSecond() + ttlSeconds;
-        String payload = ENC.encodeToString((username + "|" + exp).getBytes(StandardCharsets.UTF_8));
+        long expiresAt = clock.instant().getEpochSecond() + ttlSeconds;
+        String payload = ENC.encodeToString((username + "|" + expiresAt).getBytes(StandardCharsets.UTF_8));
         return payload + "." + ENC.encodeToString(sign(payload));
     }
 
-    /** Ambil username dari header "Authorization: Bearer ..."; lempar 401 kalau tidak valid / kedaluwarsa. */
+    /** Reads the username from the "Authorization: Bearer ..." header. Throws 401 if it is missing, wrong, or expired. */
     public String requireUser(String authorizationHeader) {
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            throw unauthorized("Token tidak ada, silakan login");
+            throw unauthorized("No token. Please log in");
         }
         String token = authorizationHeader.substring("Bearer ".length()).trim();
         int dot = token.indexOf('.');
         if (dot <= 0 || dot == token.length() - 1) {
-            throw unauthorized("Token tidak valid");
+            throw unauthorized("Invalid token");
         }
+
         String payload = token.substring(0, dot);
-        byte[] givenSig;
+        byte[] givenSignature;
         String decoded;
         try {
-            givenSig = DEC.decode(token.substring(dot + 1));
+            givenSignature = DEC.decode(token.substring(dot + 1));
             decoded = new String(DEC.decode(payload), StandardCharsets.UTF_8);
         } catch (IllegalArgumentException e) {
-            throw unauthorized("Token tidak valid");
+            throw unauthorized("Invalid token");
         }
-        if (!MessageDigest.isEqual(givenSig, sign(payload))) {
-            throw unauthorized("Token tidak valid");
+        if (!MessageDigest.isEqual(givenSignature, sign(payload))) {
+            throw unauthorized("Invalid token");
         }
-        int sep = decoded.lastIndexOf('|');
-        if (sep <= 0) {
-            throw unauthorized("Token tidak valid");
+
+        int separator = decoded.lastIndexOf('|');
+        if (separator <= 0) {
+            throw unauthorized("Invalid token");
         }
-        long exp;
+        long expiresAt;
         try {
-            exp = Long.parseLong(decoded.substring(sep + 1));
+            expiresAt = Long.parseLong(decoded.substring(separator + 1));
         } catch (NumberFormatException e) {
-            throw unauthorized("Token tidak valid");
+            throw unauthorized("Invalid token");
         }
-        if (clock.instant().getEpochSecond() > exp) {
-            throw unauthorized("Sesi berakhir, silakan login lagi");
+        if (clock.instant().getEpochSecond() > expiresAt) {
+            throw unauthorized("Session expired. Please log in again");
         }
-        return decoded.substring(0, sep);
+        return decoded.substring(0, separator);
     }
 
     private byte[] sign(String payload) {
@@ -95,7 +99,7 @@ public class TokenService {
             mac.init(new SecretKeySpec(secret, HMAC));
             return mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
         } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("HMAC tidak tersedia", e);
+            throw new IllegalStateException("HMAC is not available", e);
         }
     }
 

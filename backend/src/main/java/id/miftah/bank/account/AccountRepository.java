@@ -14,8 +14,9 @@ import id.miftah.bank.common.DependencyUnavailableException;
 import id.miftah.bank.config.BankProperties.SeedUser;
 
 /**
- * Akses PostgreSQL (saldo + riwayat transaksi) lewat JDBC.
- * Semua error koneksi/DB diubah jadi {@link DependencyUnavailableException} (HTTP 503 DB_UNAVAILABLE).
+ * PostgreSQL access (balance and transaction history) with plain JDBC.
+ * Any connection or database error becomes a {@link DependencyUnavailableException}
+ * (HTTP 503, code DB_UNAVAILABLE).
  */
 @Repository
 public class AccountRepository {
@@ -34,7 +35,7 @@ public class AccountRepository {
         this.tx = tx;
     }
 
-    /** Buat tabel kalau belum ada (idempotent). Dipanggil oleh SeedService. */
+    /** Creates the tables if they do not exist. Safe to run many times. Called by SeedService. */
     public void ensureSchema() {
         run(() -> {
             jdbc.sql("""
@@ -60,7 +61,7 @@ public class AccountRepository {
         });
     }
 
-    /** Idempotent: insert akun awal kalau belum ada. Return true kalau baris baru dibuat. */
+    /** Inserts the starting account if it is missing. Returns true if a new row was created. */
     public boolean seedIfMissing(SeedUser user) {
         return run(() -> jdbc.sql("""
                 INSERT INTO accounts (username, account_no, full_name, balance)
@@ -87,8 +88,8 @@ public class AccountRepository {
     }
 
     /**
-     * Transfer uang = saldo SELALU bertambah sebesar nominal, dan dicatat ke tabel riwayat
-     * (tanggal + jam + jumlah) dalam satu transaksi database.
+     * A transfer ALWAYS adds the amount to the balance and saves a history row
+     * (date, time, amount). Both happen in one database transaction.
      */
     public Optional<TransactionRecord> addFundsAndRecord(String username, long amount) {
         return run(() -> tx.execute(status -> {
@@ -126,7 +127,7 @@ public class AccountRepository {
                 .list());
     }
 
-    /** Cek koneksi database (untuk endpoint diagnostik). */
+    /** Is PostgreSQL reachable? Used by the diagnostic endpoint. */
     public boolean ping() {
         try {
             return jdbc.sql("SELECT 1").query(Integer.class).single() == 1;

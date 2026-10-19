@@ -15,7 +15,7 @@
     <artifactId>miftah-bank-backend</artifactId>
     <version>1.0.0</version>
     <name>miftah-bank-backend</name>
-    <description>Backend dummy banking app untuk demo Dynatrace OneAgent</description>
+    <description>Backend of the dummy banking app for Dynatrace OneAgent demos</description>
 
     <properties>
         <!-- Java 25 LTS (OneAgent mendukung Java 25 mulai versi 1.321) -->

@@ -3,7 +3,7 @@ package id.miftah.bank.common;
 import org.springframework.http.HttpStatus;
 
 /**
- * Error bisnis dengan kode HTTP + kode error yang jelas (mis. 401 INVALID_CREDENTIALS).
+ * A business error with an HTTP status and a clear error code, for example 401 INVALID_CREDENTIALS.
  */
 public class ApiException extends RuntimeException {
 

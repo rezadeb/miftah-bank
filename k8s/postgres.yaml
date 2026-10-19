@@ -1,4 +1,4 @@
-# PostgreSQL: menyimpan saldo + riwayat transaksi
+# PostgreSQL: stores the balance and the transaction history
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -49,7 +49,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef: { name: miftah-bank-secrets, key: POSTGRES_PASSWORD }
-            # subfolder supaya "lost+found" di root volume tidak mengganggu initdb
+            # Use a sub-folder so "lost+found" in the volume root does not break initdb
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           readinessProbe:

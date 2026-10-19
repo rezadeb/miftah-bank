@@ -1,4 +1,4 @@
-# Frontend: Node.js 24 (Express) - halaman web + BFF ke backend
+# Frontend: Node.js 24 (Express). Serves the web pages and forwards API calls to the backend.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

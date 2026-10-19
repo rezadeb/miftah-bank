@@ -1,5 +1,6 @@
-# nginx 1.30.4: didukung penuh oleh OneAgent mulai versi 1.345 (cek tabel "Support for NGINX" di docs Dynatrace).
-# Image Debian (glibc), bukan Alpine, supaya injeksi OneAgent berjalan mulus.
+# nginx 1.30.4 is supported by OneAgent from version 1.345.
+# Check the "Support for NGINX" table in the Dynatrace docs before you change this tag.
+# The image is Debian (glibc), not Alpine, so OneAgent injection works smoothly.
 FROM nginx:1.30.4
 
 ENV FRONTEND_UPSTREAM="frontend:3000" \

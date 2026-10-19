@@ -8,7 +8,7 @@ form.addEventListener('submit', async (event) => {
   event.preventDefault();
   hideAlert(alertBox);
   button.disabled = true;
-  button.textContent = 'Memproses...';
+  button.textContent = 'Please wait...';
 
   try {
     const user = await api('/api/login', {
@@ -23,6 +23,6 @@ form.addEventListener('submit', async (event) => {
   } catch (err) {
     showAlert(alertBox, 'err', describeError('Login failed', err));
     button.disabled = false;
-    button.textContent = 'Login';
+    button.textContent = 'Log in';
   }
 });

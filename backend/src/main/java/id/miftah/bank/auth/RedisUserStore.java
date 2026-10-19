@@ -12,9 +12,9 @@ import id.miftah.bank.common.DependencyUnavailableException;
 import id.miftah.bank.config.BankProperties.SeedUser;
 
 /**
- * Data user (untuk login) disimpan di Redis sebagai hash: key "user:{username}"
- * dengan field passwordHash, fullName, accountNo.
- * Semua error koneksi Redis diubah jadi {@link DependencyUnavailableException} (HTTP 503).
+ * User data for login lives in Redis as a hash. Key: "user:{username}".
+ * Fields: passwordHash, fullName, accountNo.
+ * Any Redis connection error becomes a {@link DependencyUnavailableException} (HTTP 503).
  */
 @Repository
 public class RedisUserStore {
@@ -46,7 +46,7 @@ public class RedisUserStore {
         }
     }
 
-    /** Idempotent: hanya menulis kalau key belum ada. Return true kalau user baru ditulis. */
+    /** Writes the user only if the key does not exist yet. Returns true if a new user was written. */
     public boolean seedIfMissing(SeedUser user) {
         try {
             String key = KEY_PREFIX + user.username();
@@ -63,7 +63,7 @@ public class RedisUserStore {
         }
     }
 
-    /** Cek koneksi Redis (untuk endpoint diagnostik). */
+    /** Is Redis reachable? Used by the diagnostic endpoint. */
     public boolean ping() {
         try {
             String pong = redis.execute((RedisCallback<String>) connection -> connection.ping());

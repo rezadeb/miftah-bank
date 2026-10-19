@@ -1,0 +1,19 @@
+# Locust load generator, deployed in its own kustomization (separate from the app).
+#   kubectl apply -k loadgen/
+#   kubectl delete -k loadgen/      # remove it again
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: miftah-bank
+
+resources:
+  - locust.yaml
+
+# The locustfiles are mounted into the pod from a ConfigMap, so no image build is needed.
+# After you edit a locustfile, run "kubectl apply -k loadgen/" and then
+# "kubectl -n miftah-bank rollout restart deployment/locust".
+configMapGenerator:
+  - name: locustfiles
+    files:
+      - locustfile.py
+      - locustfile_wave.py

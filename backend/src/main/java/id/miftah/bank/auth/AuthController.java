@@ -30,24 +30,24 @@ public class AuthController {
         this.tokens = tokens;
     }
 
-    /** Validasi username/password ke Redis. Redis mati -> 503 REDIS_UNAVAILABLE. */
+    /** Checks username and password in Redis. If Redis is down: 503 REDIS_UNAVAILABLE. */
     @PostMapping("/login")
     public LoginResponse login(@RequestBody LoginRequest request) {
         String username = request.username() == null ? "" : request.username().trim().toLowerCase();
         String password = request.password() == null ? "" : request.password();
         if (username.isEmpty() || password.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Username dan password wajib diisi");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Username and password are required");
         }
 
         RedisUserStore.StoredUser user = users.find(username)
                 .filter(u -> Passwords.matches(password, u.passwordHash()))
                 .orElseThrow(() -> {
-                    log.warn("Login gagal untuk user '{}': username atau password salah", username);
+                    log.warn("Login failed for user '{}': wrong username or password", username);
                     return new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS",
-                            "Username atau password salah");
+                            "Wrong username or password");
                 });
 
-        log.info("Login berhasil untuk user '{}'", username);
+        log.info("Login successful for user '{}'", username);
         return new LoginResponse(tokens.issue(username), username, user.fullName(), user.accountNo());
     }
 }

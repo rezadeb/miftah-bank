@@ -14,8 +14,9 @@ import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 
 /**
- * Koneksi Redis (Lettuce) dibuat "fail fast":
- * saat Redis mati, command langsung ditolak (bukan di-antri) sehingga user cepat melihat HTTP 503.
+ * The Redis connection (Lettuce) is set to "fail fast".
+ * When Redis is down, commands are rejected at once instead of waiting in a queue,
+ * so the user quickly sees HTTP 503.
  */
 @Configuration
 public class RedisConfig {

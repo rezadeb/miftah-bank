@@ -1,4 +1,4 @@
-# Redis: menyimpan data user untuk LOGIN
+# Redis: stores the user data used for LOGIN
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

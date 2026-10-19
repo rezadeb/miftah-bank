@@ -19,7 +19,7 @@ labels:
     includeSelectors: false
     includeTemplates: true
 
-# Ganti nama/tag image di sini kalau memakai registry (mis. ghcr.io), tanpa mengedit manifest:
+# Using a registry (for example ghcr.io)? Change the image name and tag here, no need to edit the manifests:
 # images:
 #   - name: miftah-bank/backend
 #     newName: ghcr.io/rezadeb/miftah-bank-backend

@@ -37,10 +37,30 @@ jobs:
           for f in public/js/*.js; do node --check "$f"; done
 
   images:
-    name: Docker build (tanpa push)
+    name: Docker build (no push)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t miftah-bank/backend:ci backend
       - run: docker build -t miftah-bank/frontend:ci frontend
       - run: docker build -t miftah-bank/load-balancer:ci loadbalancer
+
+  loadgen:
+    name: Locust files (syntax check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r loadgen/requirements.txt
+      - name: Check that Locust can load both locustfiles
+        working-directory: loadgen
+        run: |
+          python -m py_compile locustfile.py locustfile_wave.py
+          locust -f locustfile.py --list
+          locust -f locustfile_wave.py --list
+      - name: Check Kubernetes manifests render
+        run: |
+          kubectl kustomize k8s > /dev/null
+          kubectl kustomize loadgen > /dev/null

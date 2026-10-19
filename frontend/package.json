@@ -1,7 +1,7 @@
 {
   "name": "miftah-bank-frontend",
   "version": "1.0.0",
-  "description": "Frontend web (Node.js 24 + Express) dummy banking app untuk demo Dynatrace OneAgent",
+  "description": "Frontend of the dummy banking app for Dynatrace OneAgent demos (Node.js 24 + Express)",
   "type": "module",
   "private": true,
   "main": "server.js",

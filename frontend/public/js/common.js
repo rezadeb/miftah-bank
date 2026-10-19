@@ -1,5 +1,6 @@
-// Helper bersama untuk halaman Login dan Home.
+// Helpers shared by the Login and Home pages.
 
+// Rupiah format, for example "Rp 1.000.000".
 const rupiah = new Intl.NumberFormat('id-ID', {
   style: 'currency',
   currency: 'IDR',
@@ -8,8 +9,9 @@ const rupiah = new Intl.NumberFormat('id-ID', {
 
 export const formatRupiah = (value) => rupiah.format(value);
 
+// Date and time are always shown in Jakarta time (WIB).
 export const formatDate = (iso) =>
-  new Date(iso).toLocaleDateString('id-ID', {
+  new Date(iso).toLocaleDateString('en-GB', {
     timeZone: 'Asia/Jakarta',
     day: '2-digit',
     month: 'short',
@@ -17,7 +19,7 @@ export const formatDate = (iso) =>
   });
 
 export const formatTime = (iso) =>
-  new Date(iso).toLocaleTimeString('id-ID', {
+  new Date(iso).toLocaleTimeString('en-GB', {
     timeZone: 'Asia/Jakarta',
     hour: '2-digit',
     minute: '2-digit',
@@ -33,7 +35,10 @@ export class ApiError extends Error {
   }
 }
 
-/** Panggil API frontend. Respons non-2xx dilempar sebagai ApiError (termasuk 503 dari nginx/Ingress). */
+/**
+ * Calls our own server (/api/...). Any non-2xx answer is thrown as an ApiError.
+ * This includes a 503 page from nginx or the Ingress, which may not be JSON.
+ */
 export async function api(path, { method = 'GET', body } = {}) {
   let response;
   try {
@@ -44,7 +49,7 @@ export async function api(path, { method = 'GET', body } = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError(0, 'NETWORK_ERROR', 'Tidak dapat terhubung ke server');
+    throw new ApiError(0, 'NETWORK_ERROR', 'Cannot connect to the server');
   }
 
   const text = await response.text();
@@ -52,29 +57,30 @@ export async function api(path, { method = 'GET', body } = {}) {
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
-    data = null; // mis. halaman HTML/teks 503 dari Ingress atau nginx
+    data = null; // For example a plain-text 503 from the Ingress.
   }
 
   if (!response.ok) {
-    const fallback = response.status === 503 ? 'Layanan tidak tersedia (Service Unavailable)' : `HTTP ${response.status}`;
-    throw new ApiError(response.status, data?.code ?? `HTTP_${response.status}`, data?.message ?? fallback);
+    const fallbackCode = response.status === 503 ? 'SERVICE_UNAVAILABLE' : `HTTP_${response.status}`;
+    const fallbackMessage = response.status === 503 ? 'Service Unavailable' : `HTTP ${response.status}`;
+    throw new ApiError(response.status, data?.code ?? fallbackCode, data?.message ?? fallbackMessage);
   }
   return data;
 }
 
-export function showAlert(el, kind, text) {
-  el.className = `alert show ${kind}`;
-  el.textContent = text;
+export function showAlert(element, kind, text) {
+  element.className = `alert show ${kind}`;
+  element.textContent = text;
 }
 
-export function hideAlert(el) {
-  el.className = 'alert';
-  el.textContent = '';
+export function hideAlert(element) {
+  element.className = 'alert';
+  element.textContent = '';
 }
 
-/** Teks error: "Login failed: Redis tidak dapat dihubungi... (HTTP 503 REDIS_UNAVAILABLE)" */
+/** Builds the error text, for example: "Login failed: Cannot reach Redis... (HTTP 503 REDIS_UNAVAILABLE)". */
 export function describeError(prefix, err) {
-  if (!(err instanceof ApiError)) return `${prefix}: terjadi kesalahan tak terduga`;
+  if (!(err instanceof ApiError)) return `${prefix}: unexpected error`;
   const detail = err.message.startsWith(prefix) ? err.message : `${prefix}: ${err.message}`;
   const status = err.status ? `HTTP ${err.status} ` : '';
   return `${detail} (${status}${err.code})`;

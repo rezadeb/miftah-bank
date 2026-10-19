@@ -1,18 +1,26 @@
-# Contoh DynaKube (cloud native full stack) untuk lab K3s, tenant SaaS cer89933.
-# Sumber format: https://docs.dynatrace.com/docs/ingest-from/setup-on-k8s/installation/cloud-native-fullstack
-# (dicek 2026-10-19). Sesuaikan apiVersion dengan versi Dynatrace Operator yang terpasang
-# (v1beta5 = contoh manifest di docs; v1beta6 untuk image volumes, butuh Kubernetes 1.35+).
+# Example DynaKube (cloud native full stack) for the K3s lab. Tenant: SaaS cer89933.
+# Format source: https://docs.dynatrace.com/docs/ingest-from/setup-on-k8s/installation/cloud-native-fullstack
+# (checked on 2026-10-19). Match the apiVersion to your Dynatrace Operator version.
+# (v1beta5 is the manifest sample in the docs. v1beta6 is for image volumes and needs Kubernetes 1.35+.)
 #
-# Langkah:
-#   1. Install Dynatrace Operator (lihat README.md bagian "Deploy ke K3s").
-#   2. Buat secret token (nama HARUS "dynakube", namespace "dynatrace"):
+# Steps:
+#   1. Install the Dynatrace Operator (see README.md, section "Deploy to K3s").
+#   2. Create the token secret. The name MUST be "dynakube", in the "dynatrace" namespace:
 #        kubectl -n dynatrace create secret generic dynakube \
 #          --from-literal="apiToken=<OPERATOR_TOKEN>" \
 #          --from-literal="dataIngestToken=<DATA_INGEST_TOKEN>"
 #   3. kubectl apply -f dynatrace/dynakube.yaml
 #
-# Secara default OneAgent disuntik ke SEMUA namespace (termasuk miftah-bank). Untuk membatasi hanya
-# ke namespace tertentu, lihat docs "Configure monitoring for namespaces and pods".
+# By default OneAgent is injected into ALL namespaces except kube-*, openshift-* and the Operator
+# namespace. That includes miftah-bank. The Locust pod in loadgen/ is excluded with the pod
+# annotation  oneagent.dynatrace.com/inject: "false".
+#
+# To monitor only some namespaces, add this under oneAgent.cloudNativeFullStack and label the
+# namespace with  dt-monitoring=true  (kubectl label namespace miftah-bank dt-monitoring=true):
+#   namespaceSelector:
+#     matchLabels:
+#       dt-monitoring: "true"
+# Docs: https://docs.dynatrace.com/docs/ingest-from/setup-on-k8s/guides/deployment-and-configuration/monitoring-and-instrumentation/annotate
 apiVersion: dynatrace.com/v1beta5
 kind: DynaKube
 metadata:

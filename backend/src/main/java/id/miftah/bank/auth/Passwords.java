@@ -5,7 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/** Hash password sederhana (SHA-256) - cukup untuk demo lab, bukan untuk production. */
+/** Simple password hash (SHA-256). Fine for a demo lab. Not for production. */
 final class Passwords {
 
     private Passwords() {
@@ -16,7 +16,7 @@ final class Passwords {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(md.digest(password.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 tidak tersedia", e);
+            throw new IllegalStateException("SHA-256 is not available", e);
         }
     }
 

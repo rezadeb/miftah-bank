@@ -1,48 +1,54 @@
 #!/usr/bin/env bash
-# Simulasi pod mati / hidup lagi untuk demo Dynatrace (scale deployment ke 0 / 1).
+# Simulate a component failure for the Dynatrace demo.
 #
-# Pemakaian:
-#   ./scripts/simulate-failure.sh down <komponen>
-#   ./scripts/simulate-failure.sh up   <komponen>
-#   ./scripts/simulate-failure.sh status
+# Usage:
+#   ./scripts/simulate-failure.sh down   <component>   # scale the deployment to 0 (same as: kubectl scale --replicas=0)
+#   ./scripts/simulate-failure.sh up     <component>   # scale the deployment back to 1
+#   ./scripts/simulate-failure.sh kill   <component>   # delete the pod; Kubernetes starts a new one (a short outage + restart)
+#   ./scripts/simulate-failure.sh status               # show deployments and pods
 #
-# Komponen: load-balancer | frontend | backend | redis | postgres | all
+# Components: load-balancer | frontend | backend | redis | postgres | all
 set -euo pipefail
 
 NS="${NAMESPACE:-miftah-bank}"
 COMPONENTS=(load-balancer frontend backend redis postgres)
 
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 
 expected() {
   case "$1" in
-    load-balancer) echo "Ingress/Traefik membalas HTTP 503 Service Unavailable (tidak ada pod nginx)";;
-    frontend)      echo "nginx membalas HTTP 503 (halaman 'Service Unavailable' / JSON FRONTEND_UNAVAILABLE)";;
-    backend)       echo "Frontend membalas HTTP 503 'Transaction failed' / 'Login failed' (BACKEND_UNAVAILABLE)";;
-    redis)         echo "Login gagal: HTTP 503 REDIS_UNAVAILABLE (user yang sudah login masih bisa transaksi)";;
-    postgres)      echo "Cek saldo/transfer/riwayat gagal: HTTP 503 DB_UNAVAILABLE (login masih jalan)";;
+    load-balancer) echo "The Ingress (Traefik) answers HTTP 503, because no nginx pod is running.";;
+    frontend)      echo "nginx answers HTTP 503 (Service Unavailable page, or JSON FRONTEND_UNAVAILABLE).";;
+    backend)       echo "The frontend answers HTTP 503: 'Transaction failed' or 'Login failed' (BACKEND_UNAVAILABLE).";;
+    redis)         echo "Login fails with HTTP 503 REDIS_UNAVAILABLE. Users who are already logged in can still use the app.";;
+    postgres)      echo "Balance, transfer and history fail with HTTP 503 DB_UNAVAILABLE. Login still works.";;
   esac
 }
 
-scale() {  # scale <komponen> <replicas>
-  kubectl -n "$NS" scale "deployment/$1" --replicas="$2"
+check_component() {
+  [[ " ${COMPONENTS[*]} " == *" $1 "* ]] || { echo "Unknown component: $1"; usage; }
 }
+
+each_target() {  # each_target <command> <component|all>
+  local cmd="$1" target="$2"
+  if [[ "$target" == "all" ]]; then
+    for c in "${COMPONENTS[@]}"; do "$cmd" "$c"; done
+  else
+    check_component "$target"
+    "$cmd" "$target"
+  fi
+}
+
+scale_down() { kubectl -n "$NS" scale "deployment/$1" --replicas=0; }
+scale_up()   { kubectl -n "$NS" scale "deployment/$1" --replicas=1; }
+kill_pod()   { kubectl -n "$NS" delete pod -l "app.kubernetes.io/name=$1" --wait=false; }
 
 action="${1:-}"; target="${2:-}"
 case "$action" in
-  status)
-    kubectl -n "$NS" get deployments,pods -o wide
-    ;;
-  down|up)
-    [[ -z "$target" ]] && usage
-    replicas=$([[ "$action" == "down" ]] && echo 0 || echo 1)
-    if [[ "$target" == "all" ]]; then
-      for c in "${COMPONENTS[@]}"; do scale "$c" "$replicas"; done
-    else
-      [[ " ${COMPONENTS[*]} " == *" $target "* ]] || { echo "Komponen tidak dikenal: $target"; usage; }
-      scale "$target" "$replicas"
-      [[ "$action" == "down" ]] && echo "Yang diharapkan terlihat: $(expected "$target")"
-    fi
-    ;;
-  *) usage;;
+  status) kubectl -n "$NS" get deployments,pods -o wide ;;
+  down)   [[ -n "$target" ]] || usage; each_target scale_down "$target"
+          [[ "$target" == "all" ]] || echo "What you should see: $(expected "$target")" ;;
+  up)     [[ -n "$target" ]] || usage; each_target scale_up "$target" ;;
+  kill)   [[ -n "$target" ]] || usage; each_target kill_pod "$target" ;;
+  *)      usage ;;
 esac

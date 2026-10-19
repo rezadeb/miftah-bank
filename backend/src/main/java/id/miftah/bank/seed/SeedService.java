@@ -1,7 +1,5 @@
 package id.miftah.bank.seed;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,11 +12,15 @@ import id.miftah.bank.config.BankProperties;
 import id.miftah.bank.config.BankProperties.SeedUser;
 
 /**
- * Mengisi data awal (user demo) ke Redis dan PostgreSQL.
+ * Loads the demo users into Redis and the demo accounts into PostgreSQL.
  *
- * - Idempotent: data yang sudah ada tidak ditimpa (saldo tidak di-reset).
- * - Tetap mencoba tiap beberapa detik, jadi backend boleh start lebih dulu daripada
- *   Redis/Postgres, dan data otomatis terisi lagi kalau pod database dibuat ulang tanpa volume.
+ * <ul>
+ *   <li>Safe to run many times: existing data is never overwritten, so balances are not reset.</li>
+ *   <li>The backend may start before Redis or PostgreSQL. It retries every few seconds and
+ *       stops as soon as that dependency is seeded. After that it does no background work,
+ *       so no extra Redis or database calls show up in Dynatrace.</li>
+ *   <li>If you delete the Redis or PostgreSQL volume, restart the backend to seed again.</li>
+ * </ul>
  */
 @Service
 public class SeedService {
@@ -29,9 +31,11 @@ public class SeedService {
     private final RedisUserStore redisUsers;
     private final AccountRepository accounts;
 
-    // Supaya log tidak "banjir" saat dependency mati: log sekali per outage.
-    private final AtomicBoolean redisWarned = new AtomicBoolean(false);
-    private final AtomicBoolean dbWarned = new AtomicBoolean(false);
+    // Only the scheduler thread touches these flags. 'volatile' is enough.
+    private volatile boolean redisSeeded;
+    private volatile boolean databaseSeeded;
+    private volatile boolean redisWarned;
+    private volatile boolean databaseWarned;
 
     public SeedService(BankProperties props, RedisUserStore redisUsers, AccountRepository accounts) {
         this.props = props;
@@ -39,27 +43,30 @@ public class SeedService {
         this.accounts = accounts;
     }
 
-    @Scheduled(initialDelay = 1000, fixedDelayString = "${bank.seed-interval-ms}")
+    @Scheduled(initialDelay = 1000, fixedDelayString = "${bank.seed-retry-ms}")
     public void seed() {
-        seedRedis();
-        seedDatabase();
+        if (!redisSeeded) {
+            seedRedis();
+        }
+        if (!databaseSeeded) {
+            seedDatabase();
+        }
     }
 
     private void seedRedis() {
         try {
             int created = 0;
-            for (SeedUser u : props.seedUsers()) {
-                if (redisUsers.seedIfMissing(u)) {
+            for (SeedUser user : props.seedUsers()) {
+                if (redisUsers.seedIfMissing(user)) {
                     created++;
                 }
             }
-            if (created > 0) {
-                log.info("Seed Redis: {} user ditambahkan", created);
-            }
-            redisWarned.set(false);
+            redisSeeded = true;
+            log.info("Redis seed done: {} new user(s) added", created);
         } catch (DependencyUnavailableException e) {
-            if (redisWarned.compareAndSet(false, true)) {
-                log.warn("Seed Redis ditunda: Redis belum tersedia, akan dicoba lagi");
+            if (!redisWarned) {
+                redisWarned = true;
+                log.warn("Redis is not ready yet, will retry the seed");
             }
         }
     }
@@ -68,18 +75,17 @@ public class SeedService {
         try {
             accounts.ensureSchema();
             int created = 0;
-            for (SeedUser u : props.seedUsers()) {
-                if (accounts.seedIfMissing(u)) {
+            for (SeedUser user : props.seedUsers()) {
+                if (accounts.seedIfMissing(user)) {
                     created++;
                 }
             }
-            if (created > 0) {
-                log.info("Seed PostgreSQL: {} rekening ditambahkan", created);
-            }
-            dbWarned.set(false);
+            databaseSeeded = true;
+            log.info("PostgreSQL seed done: {} new account(s) added", created);
         } catch (DependencyUnavailableException e) {
-            if (dbWarned.compareAndSet(false, true)) {
-                log.warn("Seed PostgreSQL ditunda: database belum tersedia, akan dicoba lagi");
+            if (!databaseWarned) {
+                databaseWarned = true;
+                log.warn("PostgreSQL is not ready yet, will retry the seed");
             }
         }
     }

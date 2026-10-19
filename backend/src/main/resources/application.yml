@@ -6,7 +6,7 @@ spring:
   application:
     name: miftah-bank-backend
 
-  # Redis: dipakai HANYA untuk validasi login (user credentials)
+  # Redis is used ONLY to check the login (user credentials).
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -14,7 +14,7 @@ spring:
       timeout: 2s
       connect-timeout: 2s
 
-  # PostgreSQL: dipakai untuk saldo + riwayat transaksi
+  # PostgreSQL stores the balance and the transaction history.
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:miftahbank}?connectTimeout=3&socketTimeout=10&loginTimeout=3
     username: ${POSTGRES_USER:miftah}
@@ -24,18 +24,19 @@ spring:
       maximum-pool-size: 5
       minimum-idle: 0
       connection-timeout: 2000
-      # -1 = aplikasi tetap start walaupun Postgres belum/tidak ada (error ditangani saat request)
+      # -1 = the app still starts when PostgreSQL is not ready. Errors are handled per request.
       initialization-fail-timeout: -1
 
   sql:
     init:
       mode: never
 
-# Pengaturan aplikasi (DEMO ONLY - bukan untuk production)
+# App settings (DEMO ONLY, not for production)
 bank:
-  token-secret: ${BANK_TOKEN_SECRET:miftah-bank-demo-secret-ganti-kalau-perlu-min-32-karakter}
+  token-secret: ${BANK_TOKEN_SECRET:miftah-bank-demo-secret-change-me-at-least-32-chars}
   token-ttl-minutes: ${BANK_TOKEN_TTL_MINUTES:60}
-  seed-interval-ms: ${BANK_SEED_INTERVAL_MS:30000}
+  # If Redis or PostgreSQL is not ready at startup, retry the demo-data seeding every few seconds.
+  seed-retry-ms: ${BANK_SEED_RETRY_MS:5000}
   seed-users:
     - username: demo
       password: demo123

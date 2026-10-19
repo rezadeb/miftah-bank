@@ -1,4 +1,4 @@
-# Backend: Java 25 (Spring Boot) - validasi login ke Redis, saldo/transfer ke PostgreSQL
+# Backend: Java 25 (Spring Boot). Checks the login in Redis. Balance and transfers use PostgreSQL.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -48,8 +48,8 @@ spec:
             - name: BANK_TOKEN_SECRET
               valueFrom:
                 secretKeyRef: { name: miftah-bank-secrets, key: BANK_TOKEN_SECRET }
-          # Probe SENGAJA tidak mengecek Redis/Postgres: kalau database mati, pod backend tetap Ready
-          # dan membalas HTTP 503 per request (bukan di-restart).
+          # The probes do NOT check Redis or PostgreSQL, on purpose. If a database is down, the backend pod
+          # stays Ready and answers HTTP 503 per request. It is not restarted.
           startupProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 5

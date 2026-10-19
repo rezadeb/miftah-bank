@@ -1,4 +1,4 @@
-# Load balancer: nginx (didukung OneAgent NGINX module)
+# Load balancer: nginx (supported by the OneAgent NGINX module)
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -5,14 +5,14 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Konfigurasi aplikasi (prefix "bank" di application.yml).
- * Hanya untuk demo: password disimpan di config, bukan untuk production.
+ * App settings (prefix "bank" in application.yml).
+ * Demo only: demo passwords live in the config. Do not do this in production.
  */
 @ConfigurationProperties(prefix = "bank")
 public record BankProperties(
         String tokenSecret,
         int tokenTtlMinutes,
-        long seedIntervalMs,
+        long seedRetryMs,
         List<SeedUser> seedUsers) {
 
     public record SeedUser(

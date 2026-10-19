@@ -2,7 +2,7 @@ package id.miftah.bank.common;
 
 import java.time.Instant;
 
-/** Format error JSON yang sama untuk semua endpoint. */
+/** The JSON error format used by every endpoint. */
 public record ErrorResponse(int status, String code, String message, Instant timestamp) {
 
     public static ErrorResponse of(int status, String code, String message) {

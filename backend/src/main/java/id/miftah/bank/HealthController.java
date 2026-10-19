@@ -21,16 +21,17 @@ public class HealthController {
     }
 
     /**
-     * Liveness/readiness untuk Kubernetes. SENGAJA tidak mengecek Redis/Postgres:
-     * kalau dependency mati, pod backend tetap Ready dan mengembalikan HTTP 503 per request
-     * (bukan di-restart atau dikeluarkan dari Service), sehingga skenario demo konsisten.
+     * Liveness and readiness check for Kubernetes.
+     * It does NOT check Redis or PostgreSQL on purpose. If a database is down, the backend pod stays
+     * Ready and answers HTTP 503 per request. It is not restarted and not removed from the Service,
+     * so the failure demo stays predictable.
      */
     @GetMapping("/healthz")
     public Map<String, String> healthz() {
         return Map.of("status", "UP");
     }
 
-    /** Diagnostik manual: status koneksi ke Redis dan PostgreSQL. */
+    /** For manual checks: can the backend reach Redis and PostgreSQL right now? */
     @GetMapping("/api/health/dependencies")
     public Map<String, String> dependencies() {
         Map<String, String> result = new LinkedHashMap<>();

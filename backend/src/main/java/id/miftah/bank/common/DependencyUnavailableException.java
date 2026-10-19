@@ -3,8 +3,8 @@ package id.miftah.bank.common;
 import org.springframework.http.HttpStatus;
 
 /**
- * Dependency (Redis / PostgreSQL) tidak bisa dihubungi -> HTTP 503.
- * Kode error: REDIS_UNAVAILABLE atau DB_UNAVAILABLE.
+ * Redis or PostgreSQL cannot be reached. This always becomes HTTP 503.
+ * Error codes: REDIS_UNAVAILABLE and DB_UNAVAILABLE.
  */
 public class DependencyUnavailableException extends ApiException {
 
@@ -18,11 +18,11 @@ public class DependencyUnavailableException extends ApiException {
 
     public static DependencyUnavailableException redis(Throwable cause) {
         return new DependencyUnavailableException(REDIS,
-                "Redis tidak dapat dihubungi, validasi login gagal", cause);
+                "Cannot reach Redis, so the login check failed", cause);
     }
 
     public static DependencyUnavailableException database(Throwable cause) {
         return new DependencyUnavailableException(DATABASE,
-                "Database error: PostgreSQL tidak dapat dihubungi", cause);
+                "Database error: cannot reach PostgreSQL", cause);
     }
 }

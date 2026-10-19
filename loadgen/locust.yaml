@@ -1,0 +1,73 @@
+# Locust (web UI mode). Open http://<K3s-node-IP>:30089 to start the test
+# and to change the number of users and the spawn rate while it runs.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust
+  namespace: miftah-bank
+  labels:
+    app.kubernetes.io/name: locust
+    app.kubernetes.io/component: load-generator
+    app.kubernetes.io/part-of: miftah-bank
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: locust
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: locust
+        app.kubernetes.io/component: load-generator
+      annotations:
+        # Do not inject OneAgent into the load generator, so it is not mixed with the demo app.
+        oneagent.dynatrace.com/inject: "false"
+    spec:
+      containers:
+        - name: locust
+          image: locustio/locust:2.46.7
+          # To use wave traffic, change this to /mnt/locust/locustfile_wave.py
+          args: ["-f", "/mnt/locust/locustfile.py"]
+          ports:
+            - name: web
+              containerPort: 8089
+          env:
+            # Target of the test. The default goes through Traefik (the Ingress), like a real browser.
+            # You can also type another host in the web UI before you start.
+            - name: LOCUST_HOST
+              value: http://traefik.kube-system.svc.cluster.local
+            - name: WAIT_MIN
+              value: "1"
+            - name: WAIT_MAX
+              value: "3"
+          readinessProbe:
+            httpGet: { path: /, port: web }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          volumeMounts:
+            - name: locustfiles
+              mountPath: /mnt/locust
+      volumes:
+        - name: locustfiles
+          configMap:
+            name: locustfiles
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: locust
+  namespace: miftah-bank
+  labels:
+    app.kubernetes.io/name: locust
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: locust
+  ports:
+    - name: web
+      port: 8089
+      targetPort: web
+      nodePort: 30089

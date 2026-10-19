@@ -1,7 +1,9 @@
 package id.miftah.bank.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -15,24 +17,24 @@ import id.miftah.bank.common.ApiException;
 
 class TokenServiceTest {
 
-    private static final String SECRET = "unit-test-secret-minimal-32-karakter-ok";
+    private static final String SECRET = "unit-test-secret-at-least-32-characters-long";
 
     @Test
-    void tokenYangDiterbitkanBisaDiverifikasi() {
+    void issuedTokenCanBeVerified() {
         TokenService service = new TokenService(SECRET, 60, Clock.systemUTC());
         String token = service.issue("demo");
         assertEquals("demo", service.requireUser("Bearer " + token));
     }
 
     @Test
-    void tokenTanpaHeaderDitolak401() {
+    void missingHeaderIsRejectedWith401() {
         TokenService service = new TokenService(SECRET, 60, Clock.systemUTC());
         ApiException e = assertThrows(ApiException.class, () -> service.requireUser(null));
         assertEquals(HttpStatus.UNAUTHORIZED, e.status());
     }
 
     @Test
-    void tokenYangDiubahDitolak401() {
+    void changedTokenIsRejectedWith401() {
         TokenService service = new TokenService(SECRET, 60, Clock.systemUTC());
         String token = service.issue("demo");
         String tampered = token.substring(0, token.length() - 2) + "xx";
@@ -41,14 +43,14 @@ class TokenServiceTest {
     }
 
     @Test
-    void tokenDenganSecretLainDitolak401() {
-        String token = new TokenService("secret-lain-yang-juga-panjang-32-karakter", 60, Clock.systemUTC()).issue("demo");
+    void tokenSignedWithAnotherSecretIsRejected() {
+        String token = new TokenService("another-secret-that-is-also-32-chars-long", 60, Clock.systemUTC()).issue("demo");
         TokenService service = new TokenService(SECRET, 60, Clock.systemUTC());
         assertThrows(ApiException.class, () -> service.requireUser("Bearer " + token));
     }
 
     @Test
-    void tokenKedaluwarsaDitolak401() {
+    void expiredTokenIsRejectedWith401() {
         Instant now = Instant.parse("2026-10-19T09:00:00Z");
         String token = new TokenService(SECRET, 60, Clock.fixed(now, ZoneOffset.UTC)).issue("demo");
 
@@ -59,10 +61,10 @@ class TokenServiceTest {
     }
 
     @Test
-    void passwordHashCocokDanTidakCocok() {
+    void passwordHashMatchesOnlyTheRightPassword() {
         String hash = Passwords.sha256Hex("demo123");
-        assertEquals(true, Passwords.matches("demo123", hash));
-        assertEquals(false, Passwords.matches("salah", hash));
-        assertEquals(false, Passwords.matches("demo123", null));
+        assertTrue(Passwords.matches("demo123", hash));
+        assertFalse(Passwords.matches("wrong", hash));
+        assertFalse(Passwords.matches("demo123", null));
     }
 }

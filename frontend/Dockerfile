@@ -1,4 +1,4 @@
-# Node.js 24 LTS di Debian (glibc) - bukan Alpine, supaya injeksi OneAgent berjalan mulus.
+# Node.js 24 LTS on Debian (glibc), not Alpine, so OneAgent injection works smoothly.
 FROM node:24.22.0-trixie-slim
 ENV NODE_ENV=production
 WORKDIR /app

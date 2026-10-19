@@ -1,21 +1,23 @@
 # ============================================================================
 # Miftah Bank - Load Balancer (nginx)
 #
-#   Browser -> Ingress/Route -> nginx :8080 -> frontend :3000 (Node.js)
+#   Browser -> Ingress -> nginx :8080 -> frontend :3000 (Node.js)
 #
-# File ini adalah template. Saat container start, variabel ${NGINX_RESOLVER} dan
-# ${FRONTEND_UPSTREAM} diisi oleh entrypoint resmi nginx (envsubst).
+# This file is a template. When the container starts, the official nginx entrypoint fills in
+# ${NGINX_RESOLVER} and ${FRONTEND_UPSTREAM} (envsubst).
 #
-# Perilaku error (sesuai kebutuhan demo):
-#   - Frontend mati  -> nginx sendiri membalas HTTP 503 (halaman HTML / JSON untuk /api).
-#   - Frontend sehat tapi backend/Redis/Postgres mati -> HTTP 503 dari frontend diteruskan apa adanya.
-#   - Pod nginx (LB) mati -> tidak ada nginx yang bisa menjawab; error 503 datang dari Ingress/Route.
+# What users see when something is down:
+#   - Frontend pod is down  -> nginx itself answers HTTP 503 (an HTML page, or JSON for /api).
+#   - Frontend is up but backend, Redis or PostgreSQL is down
+#                           -> the 503 from the frontend is passed through unchanged.
+#   - nginx pod (this load balancer) is down -> no nginx is left to answer, so the
+#                              HTTP 503 comes from the Ingress.
 # ============================================================================
 
 log_format miftah '$remote_addr [$time_local] "$request" $status $body_bytes_sent '
                   'rt=$request_time upstream=$upstream_addr us=$upstream_status';
 
-# Resolve DNS secara dinamis supaya nginx tetap bisa start walaupun Service frontend belum ada
+# Resolve DNS at request time, so nginx can start even if the frontend Service does not exist yet.
 resolver ${NGINX_RESOLVER} valid=10s ipv6=off;
 
 server {
@@ -26,7 +28,8 @@ server {
     access_log /dev/stdout miftah;
     error_log  /dev/stderr warn;
 
-    # Jangan kompres HTML dari upstream: OneAgent perlu menyisipkan JavaScript RUM ke HTML.
+    # Do not compress HTML coming from the upstream. OneAgent must be able to inject
+    # its RUM JavaScript into the HTML.
     gzip off;
 
     set $frontend http://${FRONTEND_UPSTREAM};
@@ -40,20 +43,20 @@ server {
     proxy_send_timeout    15s;
     proxy_read_timeout    30s;
 
-    # Health check untuk Kubernetes probe (tidak bergantung pada frontend)
+    # Health check for the Kubernetes probes. It does not depend on the frontend.
     location = /nginx-health {
         access_log off;
         default_type text/plain;
         return 200 "ok\n";
     }
 
-    # Panggilan API: kalau frontend tidak bisa dihubungi -> 503 dalam format JSON
+    # API calls: if the frontend cannot be reached, answer 503 as JSON.
     location /api/ {
         proxy_pass $frontend;
         error_page 502 503 504 =503 /errors/frontend-unavailable.json;
     }
 
-    # Halaman web: kalau frontend tidak bisa dihubungi -> 503 dalam format HTML
+    # Web pages: if the frontend cannot be reached, answer 503 as an HTML page.
     location / {
         proxy_pass $frontend;
         error_page 502 503 504 =503 /errors/frontend-unavailable.html;

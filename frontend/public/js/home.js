@@ -12,26 +12,27 @@ const amountInput = document.getElementById('amount');
 const historyBody = document.getElementById('history-body');
 const historyAlert = document.getElementById('history-alert');
 
-// --- profil dari sessionStorage (diisi saat login) ------------------------
+// --- User info from sessionStorage (saved at login) ----------------------
 const user = JSON.parse(sessionStorage.getItem('mb_user') || 'null');
 if (user) {
   document.getElementById('user-name').textContent = user.fullName;
-  document.getElementById('user-acct').textContent = `Rek. ${user.accountNo}`;
+  document.getElementById('user-acct').textContent = `Account ${user.accountNo}`;
 }
 
-/** Sesi habis / token ditolak -> bersihkan cookie lalu kembali ke login. */
-async function handleSessionExpired() {
+/** Session expired or token rejected: clear the cookie and go back to the login page. */
+async function goToLogin() {
   await fetch('/api/logout', { method: 'POST' }).catch(() => {});
   sessionStorage.removeItem('mb_user');
   window.location.href = '/';
 }
 
+/** Runs an action. A 401 sends the user to login. Other errors are shown with onError. */
 async function guarded(action, prefix, onError = (message) => showAlert(alertBox, 'err', message)) {
   try {
     return await action();
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      await handleSessionExpired();
+      await goToLogin();
       return undefined;
     }
     onError(describeError(prefix, err));
@@ -39,19 +40,22 @@ async function guarded(action, prefix, onError = (message) => showAlert(alertBox
   }
 }
 
-// --- Cek Saldo ---------------------------------------------------------------
+function showBalance(amount, isoTime) {
+  balanceValue.textContent = formatRupiah(amount);
+  balanceAsOf.textContent = `As of ${formatDate(isoTime)} ${formatTime(isoTime)} WIB`;
+  balanceBox.hidden = false;
+}
+
+// --- Check Balance ---------------------------------------------------------
 btnBalance.addEventListener('click', async () => {
   hideAlert(alertBox);
   btnBalance.disabled = true;
-  const data = await guarded(() => api('/api/balance'), 'Cek saldo gagal');
+  const data = await guarded(() => api('/api/balance'), 'Check balance failed');
   btnBalance.disabled = false;
-  if (!data) return;
-  balanceValue.textContent = formatRupiah(data.balance);
-  balanceAsOf.textContent = `Per ${formatDate(data.asOf)} ${formatTime(data.asOf)} WIB`;
-  balanceBox.hidden = false;
+  if (data) showBalance(data.balance, data.asOf);
 });
 
-// --- Transfer Uang -----------------------------------------------------------
+// --- Transfer Money --------------------------------------------------------
 document.querySelectorAll('.chip').forEach((chip) => {
   chip.addEventListener('click', () => {
     amountInput.value = chip.dataset.amount;
@@ -65,7 +69,7 @@ document.getElementById('transfer-form').addEventListener('submit', async (event
 
   const amount = Number(amountInput.value);
   if (!Number.isInteger(amount) || amount < 1) {
-    showAlert(alertBox, 'err', 'Transaction failed - nominal harus berupa bilangan bulat positif');
+    showAlert(alertBox, 'err', 'Transaction failed: amount must be a whole number greater than 0');
     return;
   }
 
@@ -80,27 +84,25 @@ document.getElementById('transfer-form').addEventListener('submit', async (event
   showAlert(
     alertBox,
     'ok',
-    `Transfer ${formatRupiah(data.amount)} berhasil. Saldo sekarang ${formatRupiah(data.balance)} (ID transaksi #${data.transactionId}).`,
+    `Transfer of ${formatRupiah(data.amount)} successful. Your new balance is ${formatRupiah(data.balance)} (transaction #${data.transactionId}).`,
   );
   amountInput.value = '';
-  balanceValue.textContent = formatRupiah(data.balance);
-  balanceAsOf.textContent = `Per ${formatDate(data.createdAt)} ${formatTime(data.createdAt)} WIB`;
-  balanceBox.hidden = false;
+  showBalance(data.balance, data.createdAt);
   await loadHistory();
 });
 
-// --- Riwayat -------------------------------------------------------------------
+// --- Transaction History ---------------------------------------------------
 async function loadHistory() {
   hideAlert(historyAlert);
   const rows = await guarded(
     () => api('/api/transactions'),
-    'Riwayat gagal dimuat',
+    'Could not load history',
     (message) => showAlert(historyAlert, 'err', message),
   );
   if (!rows) return;
 
   if (rows.length === 0) {
-    historyBody.innerHTML = '<tr><td colspan="5" class="empty">Belum ada transaksi. Coba Transfer Uang di atas.</td></tr>';
+    historyBody.innerHTML = '<tr><td colspan="5" class="empty">No transactions yet. Try "Transfer Money" above.</td></tr>';
     return;
   }
 
@@ -114,10 +116,10 @@ async function loadHistory() {
         [`+ ${formatRupiah(row.amount)}`, 'num plus'],
         [formatRupiah(row.balanceAfter), 'num'],
       ];
-      for (const [text, cls] of cells) {
+      for (const [text, className] of cells) {
         const td = document.createElement('td');
         td.textContent = text;
-        if (cls) td.className = cls;
+        if (className) td.className = className;
         tr.appendChild(td);
       }
       return tr;
@@ -126,9 +128,6 @@ async function loadHistory() {
 }
 
 document.getElementById('btn-refresh').addEventListener('click', loadHistory);
-
-document.getElementById('btn-logout').addEventListener('click', async () => {
-  await handleSessionExpired();
-});
+document.getElementById('btn-logout').addEventListener('click', goToLogin);
 
 loadHistory();
