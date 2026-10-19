@@ -1,0 +1,7 @@
+#!/bin/sh
+# Dibaca (di-source) oleh entrypoint resmi nginx SEBELUM envsubst template.
+# Ambil DNS resolver dari /etc/resolv.conf (CoreDNS di K3s/OpenShift), kecuali sudah di-set manual.
+if [ -z "${NGINX_RESOLVER:-}" ]; then
+  NGINX_RESOLVER="$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)"
+fi
+export NGINX_RESOLVER

@@ -1,0 +1,67 @@
+# ============================================================================
+# Miftah Bank - Load Balancer (nginx)
+#
+#   Browser -> Ingress/Route -> nginx :8080 -> frontend :3000 (Node.js)
+#
+# File ini adalah template. Saat container start, variabel ${NGINX_RESOLVER} dan
+# ${FRONTEND_UPSTREAM} diisi oleh entrypoint resmi nginx (envsubst).
+#
+# Perilaku error (sesuai kebutuhan demo):
+#   - Frontend mati  -> nginx sendiri membalas HTTP 503 (halaman HTML / JSON untuk /api).
+#   - Frontend sehat tapi backend/Redis/Postgres mati -> HTTP 503 dari frontend diteruskan apa adanya.
+#   - Pod nginx (LB) mati -> tidak ada nginx yang bisa menjawab; error 503 datang dari Ingress/Route.
+# ============================================================================
+
+log_format miftah '$remote_addr [$time_local] "$request" $status $body_bytes_sent '
+                  'rt=$request_time upstream=$upstream_addr us=$upstream_status';
+
+# Resolve DNS secara dinamis supaya nginx tetap bisa start walaupun Service frontend belum ada
+resolver ${NGINX_RESOLVER} valid=10s ipv6=off;
+
+server {
+    listen 8080;
+    server_name _;
+    server_tokens off;
+
+    access_log /dev/stdout miftah;
+    error_log  /dev/stderr warn;
+
+    # Jangan kompres HTML dari upstream: OneAgent perlu menyisipkan JavaScript RUM ke HTML.
+    gzip off;
+
+    set $frontend http://${FRONTEND_UPSTREAM};
+
+    proxy_http_version 1.1;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 2s;
+    proxy_send_timeout    15s;
+    proxy_read_timeout    30s;
+
+    # Health check untuk Kubernetes probe (tidak bergantung pada frontend)
+    location = /nginx-health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Panggilan API: kalau frontend tidak bisa dihubungi -> 503 dalam format JSON
+    location /api/ {
+        proxy_pass $frontend;
+        error_page 502 503 504 =503 /errors/frontend-unavailable.json;
+    }
+
+    # Halaman web: kalau frontend tidak bisa dihubungi -> 503 dalam format HTML
+    location / {
+        proxy_pass $frontend;
+        error_page 502 503 504 =503 /errors/frontend-unavailable.html;
+    }
+
+    location /errors/ {
+        internal;
+        root /usr/share/nginx/miftah;
+        add_header Cache-Control "no-store" always;
+    }
+}
