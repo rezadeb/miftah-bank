@@ -1,0 +1,85 @@
+# Backend: Java 25 (Spring Boot) - validasi login ke Redis, saldo/transfer ke PostgreSQL
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: miftah-bank
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/version: "1.0.0"
+    spec:
+      containers:
+        - name: backend
+          image: miftah-bank/backend:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          env:
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PORT
+              value: "6379"
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef: { name: miftah-bank-secrets, key: POSTGRES_DB }
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: miftah-bank-secrets, key: POSTGRES_USER }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: miftah-bank-secrets, key: POSTGRES_PASSWORD }
+            - name: BANK_TOKEN_SECRET
+              valueFrom:
+                secretKeyRef: { name: miftah-bank-secrets, key: BANK_TOKEN_SECRET }
+          # Probe SENGAJA tidak mengecek Redis/Postgres: kalau database mati, pod backend tetap Ready
+          # dan membalas HTTP 503 per request (bukan di-restart).
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: miftah-bank
+  labels:
+    app.kubernetes.io/name: backend
+spec:
+  selector:
+    app.kubernetes.io/name: backend
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http

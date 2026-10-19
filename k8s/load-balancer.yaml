@@ -1,0 +1,62 @@
+# Load balancer: nginx (didukung OneAgent NGINX module)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-balancer
+  namespace: miftah-bank
+  labels:
+    app.kubernetes.io/name: load-balancer
+    app.kubernetes.io/component: load-balancer
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: load-balancer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: load-balancer
+        app.kubernetes.io/component: load-balancer
+        app.kubernetes.io/version: "1.0.0"
+    spec:
+      containers:
+        - name: nginx
+          image: miftah-bank/load-balancer:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: FRONTEND_UPSTREAM
+              value: frontend:3000
+          readinessProbe:
+            httpGet: { path: /nginx-health, port: http }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /nginx-health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 192Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: load-balancer
+  namespace: miftah-bank
+  labels:
+    app.kubernetes.io/name: load-balancer
+spec:
+  selector:
+    app.kubernetes.io/name: load-balancer
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

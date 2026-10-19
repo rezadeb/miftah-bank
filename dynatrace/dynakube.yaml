@@ -1,0 +1,46 @@
+# Contoh DynaKube (cloud native full stack) untuk lab K3s, tenant SaaS cer89933.
+# Sumber format: https://docs.dynatrace.com/docs/ingest-from/setup-on-k8s/installation/cloud-native-fullstack
+# (dicek 2026-10-19). Sesuaikan apiVersion dengan versi Dynatrace Operator yang terpasang
+# (v1beta5 = contoh manifest di docs; v1beta6 untuk image volumes, butuh Kubernetes 1.35+).
+#
+# Langkah:
+#   1. Install Dynatrace Operator (lihat README.md bagian "Deploy ke K3s").
+#   2. Buat secret token (nama HARUS "dynakube", namespace "dynatrace"):
+#        kubectl -n dynatrace create secret generic dynakube \
+#          --from-literal="apiToken=<OPERATOR_TOKEN>" \
+#          --from-literal="dataIngestToken=<DATA_INGEST_TOKEN>"
+#   3. kubectl apply -f dynatrace/dynakube.yaml
+#
+# Secara default OneAgent disuntik ke SEMUA namespace (termasuk miftah-bank). Untuk membatasi hanya
+# ke namespace tertentu, lihat docs "Configure monitoring for namespaces and pods".
+apiVersion: dynatrace.com/v1beta5
+kind: DynaKube
+metadata:
+  name: dynakube
+  namespace: dynatrace
+  annotations:
+    feature.dynatrace.com/injection-readonly-volume: "true"
+spec:
+  apiUrl: https://cer89933.live.dynatrace.com/api
+  metadataEnrichment:
+    enabled: true
+  oneAgent:
+    cloudNativeFullStack:
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+  activeGate:
+    capabilities:
+      - routing
+      - kubernetes-monitoring
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1.5Gi

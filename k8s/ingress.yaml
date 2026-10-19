@@ -1,0 +1,21 @@
+# K3s memakai Traefik sebagai Ingress controller bawaan.
+# Kalau pod load-balancer mati, Service tidak punya endpoint -> Traefik membalas HTTP 503 (Service Unavailable).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: miftah-bank
+  namespace: miftah-bank
+  labels:
+    app.kubernetes.io/name: miftah-bank
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: load-balancer
+                port:
+                  number: 80
