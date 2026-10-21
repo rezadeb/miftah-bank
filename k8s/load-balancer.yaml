@@ -7,7 +7,7 @@ metadata:
   labels:
     app.kubernetes.io/name: load-balancer
     app.kubernetes.io/component: load-balancer
-    app.kubernetes.io/version: "1.0.1"
+    app.kubernetes.io/version: "1.0.2"
 spec:
   replicas: 1
   selector:
@@ -18,11 +18,11 @@ spec:
       labels:
         app.kubernetes.io/name: load-balancer
         app.kubernetes.io/component: load-balancer
-        app.kubernetes.io/version: "1.0.1"
+        app.kubernetes.io/version: "1.0.2"
     spec:
       containers:
         - name: nginx
-          image: miftah-bank/load-balancer:1.0.1
+          image: miftah-bank/load-balancer:1.0.2
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -30,6 +30,11 @@ spec:
           env:
             - name: FRONTEND_UPSTREAM
               value: frontend:3000
+            # static  = nginx resolves the frontend name once at start-up. OneAgent can record the
+            #           nginx -> frontend call, so the link shows in the Dynatrace Map.
+            # dynamic = nginx resolves the name on every request (the old behavior).
+            - name: FRONTEND_PROXY_MODE
+              value: static
           readinessProbe:
             httpGet: { path: /nginx-health, port: http }
             initialDelaySeconds: 2

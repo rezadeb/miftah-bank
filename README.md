@@ -47,6 +47,7 @@ Everything runs in one namespace: **`miftah-bank`** (5 deployments).
 - **Probes do not check dependencies.** If a database is down, the backend pod stays *Ready* and answers HTTP 503 per request. It is not restarted, so the demo behaves the same every time.
 - **Fast, clear errors.** Redis and Postgres connection timeouts are about 2 seconds. Every error has a clear code: `REDIS_UNAVAILABLE`, `DB_UNAVAILABLE`, `BACKEND_UNAVAILABLE`, `FRONTEND_UNAVAILABLE`.
 - **Debian/Ubuntu (glibc) images, not Alpine**, so OneAgent injection works smoothly.
+- **nginx calls the frontend with a static `proxy_pass`** (see [nginx proxy mode](#nginx-proxy-mode-static-or-dynamic)), so OneAgent can record the call and show `nginx → frontend` in the Dynatrace Map.
 
 ---
 
@@ -271,10 +272,37 @@ Things to know:
 - **nginx support table** ([docs](https://docs.dynatrace.com/docs/shortlink/nginx-binaries)) is kept per patch version. Check it again before you change the `nginx` image tag.
 - **Java virtual threads** are not used on purpose. The OneAgent documentation mentions a possible deadlock risk with virtual threads under heavy load.
 - **Alpine (musl)** is avoided because some OneAgent modes have limits on it.
+- **nginx → frontend link in the Map**: with `proxy_pass` and a variable, the trace was linked (same trace ID) but OneAgent did not record an outgoing call, so the Map had no `load-balancer → frontend` line. The default is now a static `proxy_pass`. See [nginx proxy mode](#nginx-proxy-mode-static-or-dynamic).
 - **HTTP calls in the frontend** use `node:http`, not the built-in `fetch`. The OneAgent documentation does not clearly list built-in `fetch`, but it does list the standard `http` module.
 - **RUM auto-injection**: Express sends the HTML as a string and nginx uses `gzip off`, so OneAgent can add the RUM JavaScript. Do not add caching or compression that changes the HTML. After deploy, check that RUM sessions appear. If not, look at the `X-OneAgent-JS-Injection` header.
 - **Redis client**: the backend uses Lettuce (default in Spring Data Redis). If Redis spans are missing in the trace, switch to Jedis (add the `jedis` dependency and set `spring.data.redis.client-type=jedis`).
 - **Persistent data**: Redis and Postgres use PVCs. The backend also fills in the demo data again if it is empty.
+
+### nginx proxy mode (static or dynamic)
+
+Set with `FRONTEND_PROXY_MODE` in `k8s/load-balancer.yaml`.
+
+| | `static` (default) | `dynamic` |
+|---|---|---|
+| `proxy_pass` | `http://frontend.<namespace>.svc.cluster.local:3000` | `$frontend` (a variable) |
+| DNS lookup | Once, when nginx starts | On every request (cached 10 s) |
+| `nginx → frontend` line in the Dynatrace Map | Expected (see "How to check" below) | Not shown |
+| Frontend pod is down | Fast `502`, then nginx answers `503` | Same |
+| Frontend pod comes back | Works at once, no restart | Same |
+| nginx starts before the `frontend` Service exists | nginx **fails to start** (`host not found in upstream`). Kubernetes restarts the container, and it works once the Service exists. | nginx starts normally |
+| Service is deleted and created again (new ClusterIP) | nginx keeps the **old IP** until it restarts: `kubectl -n miftah-bank rollout restart deployment/load-balancer` | Picks up the new IP within about 10 s |
+
+Normal use is not affected: scaling the frontend to 0 or killing its pod does not change the Service IP.
+
+**How to check** (after you deploy the new load-balancer image): open the app, click around, then look at the `load-balancer` service in the Dynatrace Map. Or use this DQL, which should return an nginx span with `span.kind == "client"`:
+
+```
+fetch spans, from: now()-15m
+| filter k8s.namespace.name == "miftah-bank" and dt.service.name == "load-balancer" and span.kind == "client"
+| limit 5
+```
+
+To go back to the old behavior, set `FRONTEND_PROXY_MODE` to `dynamic` and run `kubectl apply -k k8s/`.
 
 ---
 
@@ -328,6 +356,7 @@ Open `http://localhost:3000`. nginx is not needed for local tests.
 | `http://<node-IP>/` does not open | `kubectl -n miftah-bank get ingress,pods`. Check that Traefik runs: `kubectl -n kube-system get pods,svc`. |
 | No data in Dynatrace | Check the DynaKube and that the namespace is monitored. Restart the deployments after the DynaKube is ready. |
 | Locust shows 100% failures | Check the host in the web UI. Open the same URL in your browser. Check that the app is not in a failure scenario (`./scripts/simulate-failure.sh status`). |
+| Load-balancer pod restarts, log says `host not found in upstream` | nginx started before the `frontend` Service existed (static mode). It recovers by itself after the restart. Check `kubectl -n miftah-bank get svc frontend`. |
 | Backend log: "Redis is not ready yet, will retry the seed" (or the same for PostgreSQL) | Redis or Postgres is not ready yet. The backend retries every 5 seconds and stops when it works. |
 
 ---

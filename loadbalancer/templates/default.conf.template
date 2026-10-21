@@ -4,7 +4,14 @@
 #   Browser -> Ingress -> nginx :8080 -> frontend :3000 (Node.js)
 #
 # This file is a template. When the container starts, the official nginx entrypoint fills in
-# ${NGINX_RESOLVER} and ${FRONTEND_UPSTREAM} (envsubst).
+# ${NGINX_RESOLVER}, ${FRONTEND_UPSTREAM} and ${FRONTEND_PROXY_PASS} (envsubst).
+#
+# FRONTEND_PROXY_MODE (set in 05-resolver.envsh) decides how nginx calls the frontend:
+#   static  (default) proxy_pass http://frontend...:3000  - the name is resolved once, when nginx starts.
+#                     OneAgent can record this as an outgoing call, so nginx -> frontend shows in the Map.
+#   dynamic           proxy_pass $frontend                - the name is resolved on every request (resolver).
+#                     nginx can start before the frontend Service exists, but OneAgent may not
+#                     record the outgoing call.
 #
 # What users see when something is down:
 #   - Frontend pod is down  -> nginx itself answers HTTP 503 (an HTML page, or JSON for /api).
@@ -17,7 +24,7 @@
 log_format miftah '$remote_addr [$time_local] "$request" $status $body_bytes_sent '
                   'rt=$request_time upstream=$upstream_addr us=$upstream_status';
 
-# Resolve DNS at request time, so nginx can start even if the frontend Service does not exist yet.
+# Only used in "dynamic" mode (proxy_pass with a variable).
 resolver ${NGINX_RESOLVER} valid=10s ipv6=off;
 
 server {
@@ -32,7 +39,7 @@ server {
     # its RUM JavaScript into the HTML.
     gzip off;
 
-    set $frontend http://${FRONTEND_UPSTREAM};
+    set $frontend http://${FRONTEND_UPSTREAM};   # used only in "dynamic" mode
 
     proxy_http_version 1.1;
     proxy_set_header Host              $host;
@@ -52,13 +59,13 @@ server {
 
     # API calls: if the frontend cannot be reached, answer 503 as JSON.
     location /api/ {
-        proxy_pass $frontend;
+        proxy_pass ${FRONTEND_PROXY_PASS};
         error_page 502 503 504 =503 /errors/frontend-unavailable.json;
     }
 
     # Web pages: if the frontend cannot be reached, answer 503 as an HTML page.
     location / {
-        proxy_pass $frontend;
+        proxy_pass ${FRONTEND_PROXY_PASS};
         error_page 502 503 504 =503 /errors/frontend-unavailable.html;
     }
 

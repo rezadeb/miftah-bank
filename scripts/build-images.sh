@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # Default tag per image. Set TAG=x.y.z to use one tag for all three images.
-declare -A TAGS=([backend]="1.0.0" [frontend]="1.0.0" [load-balancer]="1.0.1")
+declare -A TAGS=([backend]="1.0.0" [frontend]="1.0.0" [load-balancer]="1.0.2")
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMPORT_K3S=false
 [[ "${1:-}" == "--import-k3s" ]] && IMPORT_K3S=true

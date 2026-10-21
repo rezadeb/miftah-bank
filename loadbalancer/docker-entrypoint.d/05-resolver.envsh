@@ -8,6 +8,10 @@
 #    So if the host name has no dot, we add the first search domain, for example
 #    frontend:3000 -> frontend.miftah-bank.svc.cluster.local:3000
 #
+# 3. FRONTEND_PROXY_PASS: the value used in "proxy_pass", chosen by FRONTEND_PROXY_MODE:
+#      static  (default) -> http://<FRONTEND_UPSTREAM>   (resolved once at start-up)
+#      dynamic           -> $frontend                     (resolved per request, needs the resolver)
+#
 # RESOLV_CONF can be set to another file (used only for testing).
 RESOLV_CONF="${RESOLV_CONF:-/etc/resolv.conf}"
 
@@ -30,3 +34,12 @@ case "$upstream_host" in
     ;;
 esac
 export FRONTEND_UPSTREAM
+
+FRONTEND_PROXY_MODE="${FRONTEND_PROXY_MODE:-static}"
+case "$FRONTEND_PROXY_MODE" in
+  static)  FRONTEND_PROXY_PASS="http://${FRONTEND_UPSTREAM}" ;;
+  dynamic) FRONTEND_PROXY_PASS='$frontend' ;;
+  *)       echo "05-resolver.envsh: FRONTEND_PROXY_MODE must be 'static' or 'dynamic', not '$FRONTEND_PROXY_MODE'" >&2
+           exit 1 ;;
+esac
+export FRONTEND_PROXY_MODE FRONTEND_PROXY_PASS

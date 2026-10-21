@@ -4,7 +4,8 @@
 FROM nginx:1.30.4
 
 ENV FRONTEND_UPSTREAM="frontend:3000" \
-    NGINX_ENVSUBST_FILTER="^(NGINX_RESOLVER|FRONTEND_UPSTREAM)$"
+    FRONTEND_PROXY_MODE="static" \
+    NGINX_ENVSUBST_FILTER="^(NGINX_RESOLVER|FRONTEND_UPSTREAM|FRONTEND_PROXY_PASS)$"
 
 COPY --chmod=0755 docker-entrypoint.d/05-resolver.envsh /docker-entrypoint.d/05-resolver.envsh
 COPY templates/default.conf.template /etc/nginx/templates/default.conf.template
