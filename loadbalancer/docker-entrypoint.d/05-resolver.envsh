@@ -1,7 +1,32 @@
 #!/bin/sh
 # The official nginx entrypoint sources this file BEFORE it runs envsubst on the templates.
-# It finds the DNS server in /etc/resolv.conf (CoreDNS in K3s), unless NGINX_RESOLVER is already set.
+#
+# 1. NGINX_RESOLVER: the DNS server, taken from /etc/resolv.conf (CoreDNS in K3s),
+#    unless NGINX_RESOLVER is already set.
+# 2. FRONTEND_UPSTREAM: nginx does NOT use the "search" domains of resolv.conf when proxy_pass has
+#    a variable. A short name like "frontend" fails ("could not be resolved (3: Host not found)").
+#    So if the host name has no dot, we add the first search domain, for example
+#    frontend:3000 -> frontend.miftah-bank.svc.cluster.local:3000
+#
+# RESOLV_CONF can be set to another file (used only for testing).
+RESOLV_CONF="${RESOLV_CONF:-/etc/resolv.conf}"
+
 if [ -z "${NGINX_RESOLVER:-}" ]; then
-  NGINX_RESOLVER="$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)"
+  NGINX_RESOLVER="$(awk '/^nameserver/ {print $2; exit}' "$RESOLV_CONF")"
 fi
 export NGINX_RESOLVER
+
+upstream_host="${FRONTEND_UPSTREAM%%:*}"
+case "$upstream_host" in
+  *.*) ;;  # already a full name (or an IP address): keep it
+  *)
+    search_domain="$(awk '/^search/ {print $2; exit}' "$RESOLV_CONF")"
+    if [ -n "$search_domain" ]; then
+      case "$FRONTEND_UPSTREAM" in
+        *:*) FRONTEND_UPSTREAM="${upstream_host}.${search_domain}:${FRONTEND_UPSTREAM#*:}" ;;
+        *)   FRONTEND_UPSTREAM="${upstream_host}.${search_domain}" ;;
+      esac
+    fi
+    ;;
+esac
+export FRONTEND_UPSTREAM

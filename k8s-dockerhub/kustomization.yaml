@@ -16,4 +16,4 @@ images:
     newTag: "1.0.0"
   - name: miftah-bank/load-balancer
     newName: docker.io/doger123/miftah-bank-load-balancer
-    newTag: "1.0.0"
+    newTag: "1.0.1"
