@@ -5,8 +5,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NS=miftah-bank
+# Default: images imported into K3s. For Docker Hub images use:
+#   K8S_DIR=k8s/overlays/dockerhub ./scripts/deploy.sh
+K8S_DIR="${K8S_DIR:-k8s}"
 
-kubectl apply -k "$ROOT/k8s"
+kubectl apply -k "$ROOT/$K8S_DIR"
 
 echo ">>> Waiting for all deployments to be ready..."
 for d in redis postgres backend frontend load-balancer; do
