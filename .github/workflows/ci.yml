@@ -64,3 +64,4 @@ jobs:
         run: |
           kubectl kustomize k8s > /dev/null
           kubectl kustomize loadgen > /dev/null
+          kubectl kustomize k8s-dockerhub > /dev/null

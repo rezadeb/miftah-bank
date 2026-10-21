@@ -112,7 +112,7 @@ The manifests use `imagePullPolicy: IfNotPresent`, so Kubernetes will not try to
 |---|---|---|
 | **A. Build on the node + import** (recommended) | `./scripts/build-images.sh --import-k3s` | Single-node lab like `miftah-ubuntu`. Simplest. Needs Docker on the node. |
 | **B. Image tar files** | `docker save` the image to a `.tar` file in `/var/lib/rancher/k3s/agent/images/`. K3s imports it when it starts. | Build on another machine, copy the files, no registry. |
-| **C. A registry** (GHCR, Docker Hub, local registry) | Push the images, then change the names in `k8s/overlays/dockerhub/kustomization.yaml` and deploy with `K8S_DIR=k8s/overlays/dockerhub ./scripts/deploy.sh`. | Multi-node cluster, or you want CI to publish images. A private registry also needs an `imagePullSecret`. |
+| **C. A registry** (GHCR, Docker Hub, local registry) | Push the images, then change the names in `k8s-dockerhub/kustomization.yaml` and deploy with `K8S_DIR=k8s-dockerhub ./scripts/deploy.sh`. | Multi-node cluster, or you want CI to publish images. A private registry also needs an `imagePullSecret`. |
 
 Notes:
 - Building *inside* the cluster is possible, but it needs an extra tool. Kaniko is archived (June 2025), so it is not a good choice for a new setup.

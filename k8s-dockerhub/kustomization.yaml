@@ -1,11 +1,11 @@
 # Use the images from Docker Hub (user: doger123) instead of images imported into K3s.
-#   kubectl apply -k k8s/overlays/dockerhub
+#   kubectl apply -k k8s-dockerhub
 # The Docker Hub repositories must be Public, or you must create an imagePullSecret.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../..
+  - ../k8s
 
 images:
   - name: miftah-bank/backend
