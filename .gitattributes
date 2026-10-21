@@ -1,0 +1,6 @@
+# Always use LF line endings, also on Windows.
+# CRLF breaks shell scripts inside Linux containers (for example the nginx *.envsh file).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
