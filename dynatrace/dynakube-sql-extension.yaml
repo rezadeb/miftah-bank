@@ -1,0 +1,31 @@
+# Parts to MERGE into your own DynaKube to run the Dynatrace SQL database extensions
+# (PostgreSQL) on Kubernetes. This file is not meant to be applied by itself.
+# Checked against Dynatrace Docs on 2026-10-22 (Operator 1.11.0, DynaKube v1beta6).
+#
+# Where: the DynaKube whose ActiveGate has the "kubernetes-monitoring" capability.
+# The docs say that capability is mandatory (and the flag
+# feature.dynatrace.com/automatic-kubernetes-api-monitoring must not be "false").
+#
+# After you apply it, the Operator creates two pods in the "dynatrace" namespace:
+#   <dynakube>-extension-controller-0
+#   <dynakube>-sql-ext-exec-<id>-<hash>
+#
+# The id below is the "Executor ID" in the Dynatrace UI (Extensions > PostgreSQL > Add configuration).
+# Rules: max 8 characters, lowercase letters/digits/hyphen, start and end with a letter or digit.
+#
+# Image tags: both images are required and must be set by hand. List the available tags in
+# public.ecr.aws/dynatrace/dynatrace-eec and public.ecr.aws/dynatrace/dynatrace-sql-extension-executor.
+# Use a version of 1.345 or newer. Here: the same build as the OneAgent image.
+spec:
+  extensions:
+    databases:
+      - id: mif-pgl
+  templates:
+    extensionExecutionController:
+      imageRef:
+        repository: public.ecr.aws/dynatrace/dynatrace-eec
+        tag: "1.347.62.20261019-084101"
+    sqlExtensionExecutor:
+      imageRef:
+        repository: public.ecr.aws/dynatrace/dynatrace-sql-extension-executor
+        tag: "1.347.62.20261019-084101"

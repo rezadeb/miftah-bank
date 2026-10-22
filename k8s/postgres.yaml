@@ -36,6 +36,13 @@ spec:
       containers:
         - name: postgres
           image: postgres:17.11
+          # Needed by the Dynatrace PostgreSQL extension (query-level statistics).
+          # Changing these needs a Postgres restart. See "Monitor PostgreSQL" in the README.
+          args:
+            - -c
+            - shared_preload_libraries=pg_stat_statements
+            - -c
+            - track_activity_query_size=4096
           ports:
             - name: postgres
               containerPort: 5432

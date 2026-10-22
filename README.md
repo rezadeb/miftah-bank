@@ -79,7 +79,8 @@ k8s/            Kubernetes manifests (kustomize), namespace miftah-bank
 k8s-dockerhub/  Same manifests, images from Docker Hub
 k8s-apache/     Same as k8s-dockerhub, but with Apache instead of nginx (experiment)
 loadgen/        Locust load generator (locustfile + Kubernetes manifests)
-dynatrace/      Example DynaKube (cloud native full stack)
+dynatrace/      Example DynaKube (cloud native full stack) + parts for the SQL extension
+db/             SQL for the Dynatrace monitoring user (PostgreSQL)
 scripts/        build-images.sh, deploy.sh, simulate-failure.sh
 ```
 
@@ -255,6 +256,41 @@ fetch logs, from: now()-30m
 | filter loglevel == "ERROR"
 | limit 50
 ```
+
+### Monitor PostgreSQL with the Dynatrace extension (optional)
+
+The PostgreSQL extension runs **inside the cluster** (Extension Execution Controller + SQL Extension Executor).
+Checked against Dynatrace Docs on 2026-10-22 (Operator 1.11.0, DynaKube `v1beta6`).
+
+1. **DynaKube.** Merge the parts of [`dynatrace/dynakube-sql-extension.yaml`](dynatrace/dynakube-sql-extension.yaml) into the DynaKube whose ActiveGate has `kubernetes-monitoring`, then `kubectl apply -f` your DynaKube file. After 1-2 minutes, the pods `<dynakube>-extension-controller-0` and `<dynakube>-sql-ext-exec-<id>-...` are `Running`.
+   The `id` you choose here is the **Executor ID** in the Dynatrace UI. It is not shown anywhere in the UI. Max 8 characters, lowercase letters, digits and `-`.
+2. **Postgres settings.** `k8s/postgres.yaml` starts Postgres with `shared_preload_libraries=pg_stat_statements`. Apply it (`kubectl apply -k k8s-apache` or your usual overlay). **Postgres restarts**, so balance and history return 503 for about 10-20 seconds.
+3. **Monitoring user.** Run the SQL file, then set a real password:
+   ```bash
+   kubectl -n miftah-bank exec -i deployment/postgres -- psql -U miftah -d postgres -f - < db/monitoring-user.sql
+   kubectl -n miftah-bank exec -it deployment/postgres -- psql -U miftah -d postgres
+   # then, inside psql:  ALTER USER dynatrace WITH PASSWORD '<your password>';
+   ```
+   The user lives in the Postgres data volume (PVC). It survives pod restarts, but not `kubectl delete -k k8s/` (this deletes the volume).
+4. **Dynatrace UI.** *Extensions > PostgreSQL > Add configuration > Kubernetes*:
+
+   | Field | Value |
+   |---|---|
+   | Executor ID | the `id` from step 1 |
+   | Use single cluster | on, pick your cluster |
+   | Endpoint configuration type | Explicit endpoint configuration |
+   | Host / Port | `postgres.miftah-bank.svc.cluster.local` / `5432` (use the full name: the executor runs in another namespace) |
+   | Database name | `postgres` (the docs say to configure one database per instance, usually `postgres`) |
+   | Authentication | Basic, user `dynatrace`, the password from step 3. Leave *Use credential vault* off (the docs do not mention it for Kubernetes). |
+   | SSL, connection string, database discovery | off for the first test |
+
+5. **Check.** Open the *Health* tab of the extension. On the Postgres side, failed logins are visible with:
+   ```bash
+   kubectl -n miftah-bank logs deployment/postgres --since=5m | grep -E "FATAL|ERROR"
+   ```
+   `password authentication failed ... Role "dynatrace" does not exist` means step 3 is missing. `Password does not match` means the password in the UI differs from the one in Postgres.
+
+For production use the docs recommend file-based credentials (a Secret mounted into the executor) instead of typing the password in the UI: *Set up file-based endpoints and credentials*.
 
 ---
 
