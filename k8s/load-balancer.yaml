@@ -30,9 +30,9 @@ spec:
           env:
             - name: FRONTEND_UPSTREAM
               value: frontend:3000
-            # static  = nginx resolves the frontend name once at start-up. OneAgent can record the
-            #           nginx -> frontend call, so the link shows in the Dynatrace Map.
-            # dynamic = nginx resolves the name on every request (the old behavior).
+            # static  = nginx resolves the frontend name once at start-up.
+            # dynamic = nginx resolves the name on every request.
+            # Both give the same result in Dynatrace (no nginx -> frontend line in the Map).
             - name: FRONTEND_PROXY_MODE
               value: static
           readinessProbe:

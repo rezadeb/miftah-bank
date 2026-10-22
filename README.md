@@ -47,7 +47,7 @@ Everything runs in one namespace: **`miftah-bank`** (5 deployments).
 - **Probes do not check dependencies.** If a database is down, the backend pod stays *Ready* and answers HTTP 503 per request. It is not restarted, so the demo behaves the same every time.
 - **Fast, clear errors.** Redis and Postgres connection timeouts are about 2 seconds. Every error has a clear code: `REDIS_UNAVAILABLE`, `DB_UNAVAILABLE`, `BACKEND_UNAVAILABLE`, `FRONTEND_UNAVAILABLE`.
 - **Debian/Ubuntu (glibc) images, not Alpine**, so OneAgent injection works smoothly.
-- **nginx calls the frontend with a static `proxy_pass`** (see [nginx proxy mode](#nginx-proxy-mode-static-or-dynamic)), so OneAgent can record the call and show `nginx → frontend` in the Dynatrace Map.
+- **nginx → frontend line in the Map: known gap.** OneAgent links the trace (same trace ID), but it does not record an outgoing call from nginx, so the Map has no `load-balancer → frontend` line. A static `proxy_pass` did not change this. An [Apache httpd variant](#experiment-apache-httpd-as-the-load-balancer) is available to test other load balancers.
 
 ---
 
@@ -74,7 +74,10 @@ Everything runs in one namespace: **`miftah-bank`** (5 deployments).
 backend/        Spring Boot (Java 25) + Dockerfile + unit tests
 frontend/       Node.js 24 (Express) + views/ + public/ + Dockerfile
 loadbalancer/   nginx (config template, 503 error pages) + Dockerfile
+loadbalancer-apache/   Apache httpd variant of the load balancer (experiment) + Dockerfile
 k8s/            Kubernetes manifests (kustomize), namespace miftah-bank
+k8s-dockerhub/  Same manifests, images from Docker Hub
+k8s-apache/     Same as k8s-dockerhub, but with Apache instead of nginx (experiment)
 loadgen/        Locust load generator (locustfile + Kubernetes manifests)
 dynatrace/      Example DynaKube (cloud native full stack)
 scripts/        build-images.sh, deploy.sh, simulate-failure.sh
@@ -272,7 +275,7 @@ Things to know:
 - **nginx support table** ([docs](https://docs.dynatrace.com/docs/shortlink/nginx-binaries)) is kept per patch version. Check it again before you change the `nginx` image tag.
 - **Java virtual threads** are not used on purpose. The OneAgent documentation mentions a possible deadlock risk with virtual threads under heavy load.
 - **Alpine (musl)** is avoided because some OneAgent modes have limits on it.
-- **nginx → frontend link in the Map**: with `proxy_pass` and a variable, the trace was linked (same trace ID) but OneAgent did not record an outgoing call, so the Map had no `load-balancer → frontend` line. The default is now a static `proxy_pass`. See [nginx proxy mode](#nginx-proxy-mode-static-or-dynamic).
+- **nginx → frontend link in the Map**: the trace is linked (same trace ID, the frontend span has the nginx span as parent), but OneAgent does not record an outgoing (`client`) call from nginx, so the Map has no `load-balancer → frontend` line. This happens with a variable `proxy_pass` and also with a static one (checked on 2026-10-22). The NGINX documentation says outgoing requests from the `proxy` module are covered, so this looks like a gap between the documentation and the behavior. See [nginx proxy mode](#nginx-proxy-mode-static-or-dynamic) and the [Apache experiment](#experiment-apache-httpd-as-the-load-balancer).
 - **HTTP calls in the frontend** use `node:http`, not the built-in `fetch`. The OneAgent documentation does not clearly list built-in `fetch`, but it does list the standard `http` module.
 - **RUM auto-injection**: Express sends the HTML as a string and nginx uses `gzip off`, so OneAgent can add the RUM JavaScript. Do not add caching or compression that changes the HTML. After deploy, check that RUM sessions appear. If not, look at the `X-OneAgent-JS-Injection` header.
 - **Redis client**: the backend uses Lettuce (default in Spring Data Redis). If Redis spans are missing in the trace, switch to Jedis (add the `jedis` dependency and set `spring.data.redis.client-type=jedis`).
@@ -286,7 +289,7 @@ Set with `FRONTEND_PROXY_MODE` in `k8s/load-balancer.yaml`.
 |---|---|---|
 | `proxy_pass` | `http://frontend.<namespace>.svc.cluster.local:3000` | `$frontend` (a variable) |
 | DNS lookup | Once, when nginx starts | On every request (cached 10 s) |
-| `nginx → frontend` line in the Dynatrace Map | Expected (see "How to check" below) | Not shown |
+| `nginx → frontend` line in the Dynatrace Map | **Not shown** (tested on 2026-10-22, same as dynamic) | Not shown |
 | Frontend pod is down | Fast `502`, then nginx answers `503` | Same |
 | Frontend pod comes back | Works at once, no restart | Same |
 | nginx starts before the `frontend` Service exists | nginx **fails to start** (`host not found in upstream`). Kubernetes restarts the container, and it works once the Service exists. | nginx starts normally |
@@ -294,7 +297,7 @@ Set with `FRONTEND_PROXY_MODE` in `k8s/load-balancer.yaml`.
 
 Normal use is not affected: scaling the frontend to 0 or killing its pod does not change the Service IP.
 
-**How to check** (after you deploy the new load-balancer image): open the app, click around, then look at the `load-balancer` service in the Dynatrace Map. Or use this DQL, which should return an nginx span with `span.kind == "client"`:
+**How to check:** open the app, click around, then look at the `load-balancer` service in the Dynatrace Map. Or use this DQL. For nginx it returns **no rows**, because nginx only creates `server` spans:
 
 ```
 fetch spans, from: now()-15m
@@ -303,6 +306,33 @@ fetch spans, from: now()-15m
 ```
 
 To go back to the old behavior, set `FRONTEND_PROXY_MODE` to `dynamic` and run `kubectl apply -k k8s/`.
+
+### Experiment: Apache httpd as the load balancer
+
+Goal: find a load balancer for which OneAgent records the outgoing call, so the Map shows `load-balancer → frontend`.
+The Dynatrace documentation does not say whether Apache creates `client` spans, so this is a test, not a promise.
+
+| | nginx (default) | Apache (experiment) |
+|---|---|---|
+| Image | `miftah-bank-load-balancer:1.0.2` | `miftah-bank-load-balancer-apache:1.0.0` (`httpd:2.4.69`, Debian) |
+| Health check path | `/nginx-health` | `/apache-health` |
+| Deploy | `kubectl apply -k k8s-dockerhub` | `kubectl apply -k k8s-apache` |
+| Behavior when something is down | 503 HTML, or JSON for `/api` | Same |
+
+Steps (the Service, the Ingress and Locust do not change):
+
+```bash
+# 1. Build and push the image (see section 4.2, option C), then:
+kubectl apply -k k8s-apache
+kubectl -n miftah-bank rollout status deployment/load-balancer
+
+# 2. Send some traffic (Locust is enough), wait 2-3 minutes, then check the Map.
+
+# 3. Go back to nginx:
+kubectl apply -k k8s-dockerhub
+```
+
+The Apache image is built with `httpd -t`, so a bad configuration fails the build. Apache resolves the frontend name with the normal system resolver, so the short name `frontend` works, and Apache still starts if the name cannot be resolved yet (requests get 502/503 until it can).
 
 ---
 

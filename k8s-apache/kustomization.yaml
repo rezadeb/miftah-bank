@@ -1,0 +1,26 @@
+# EXPERIMENT: use Apache httpd instead of nginx as the load balancer.
+#   kubectl apply -k k8s-apache          (or: K8S_DIR=k8s-apache ./scripts/deploy.sh)
+# Go back to nginx:
+#   kubectl apply -k k8s-dockerhub
+#
+# This overlay is built on top of k8s-dockerhub (images from Docker Hub, user: doger123).
+# It replaces the container of the "load-balancer" Deployment. The Service, Ingress and the
+# name "load-balancer" stay the same, so nothing else (Locust, scripts) needs to change.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../k8s-dockerhub
+
+patches:
+  - path: load-balancer-apache-patch.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: load-balancer
+
+images:
+  - name: miftah-bank/load-balancer-apache
+    newName: docker.io/doger123/miftah-bank-load-balancer-apache
+    newTag: "1.0.0"

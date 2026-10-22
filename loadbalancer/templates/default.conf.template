@@ -8,10 +8,10 @@
 #
 # FRONTEND_PROXY_MODE (set in 05-resolver.envsh) decides how nginx calls the frontend:
 #   static  (default) proxy_pass http://frontend...:3000  - the name is resolved once, when nginx starts.
-#                     OneAgent can record this as an outgoing call, so nginx -> frontend shows in the Map.
 #   dynamic           proxy_pass $frontend                - the name is resolved on every request (resolver).
-#                     nginx can start before the frontend Service exists, but OneAgent may not
-#                     record the outgoing call.
+#                     nginx can start before the frontend Service exists.
+# Tested on 2026-10-22: both modes give the same result in Dynatrace. The trace is linked, but
+# OneAgent does not record an outgoing call, so there is no nginx -> frontend line in the Map.
 #
 # What users see when something is down:
 #   - Frontend pod is down  -> nginx itself answers HTTP 503 (an HTML page, or JSON for /api).

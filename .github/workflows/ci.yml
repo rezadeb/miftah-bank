@@ -44,6 +44,7 @@ jobs:
       - run: docker build -t miftah-bank/backend:ci backend
       - run: docker build -t miftah-bank/frontend:ci frontend
       - run: docker build -t miftah-bank/load-balancer:ci loadbalancer
+      - run: docker build -t miftah-bank/load-balancer-apache:ci loadbalancer-apache
 
   loadgen:
     name: Locust files (syntax check)
@@ -65,3 +66,4 @@ jobs:
           kubectl kustomize k8s > /dev/null
           kubectl kustomize loadgen > /dev/null
           kubectl kustomize k8s-dockerhub > /dev/null
+          kubectl kustomize k8s-apache | grep -q 'miftah-bank-load-balancer-apache'
